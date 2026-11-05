@@ -1,0 +1,840 @@
+
+local function findSheriff()
+    local function validate(inst)
+        if not (inst:IsA("Tool") or inst:IsA("Model")) then return nil end
+        if insideChar(inst) or isLocalOrVM(inst) then return nil end
+        local part = getWorldAnchor(inst)
+        if not part or not part.Parent then return nil end
+        return part
+    end
+    for _, inst in ipairs(Workspace:GetDescendants()) do
+        if (inst:IsA("Tool") or inst:IsA("Model")) and isSheriff(inst) then
+            local p = validate(inst)
+            if p then return inst, p end
+        end
+    end
+    if CFG.SheriffTPAnyDrop then
+        for _, inst in ipairs(Workspace:GetDescendants()) do
+            if inst:IsA("Tool") then
+                local p = validate(inst)
+                if p then return inst, p end
+            end
+        end
+        for _, inst in ipairs(Workspace:GetDescendants()) do
+            if inst:IsA("Model") and weaponToRole(inst.Name) then
+                local p = validate(inst)
+                if p then return inst, p end
+            end
+        end
+    end
+end
+local function teleportSheriff(silent)
+    local gun, part = findSheriff()
+    if not gun or not part then
+        if not silent then print("[BD] " .. L("tp_msg_notfound")) end
+        return false
+    end
+    local c = LocalPlayer.Character
+    if not c or not c.PrimaryPart then
+        if not silent then print("[BD] Character not ready") end
+        return false
+    end
+    local hum = c:FindFirstChildOfClass("Humanoid")
+    if hum and hum.Health <= 0 then
+        if not silent then print("[BD] You are dead") end
+        return false
+    end
+    c:PivotTo(CFrame.new(part.Position + Vector3.new(0, 3, 0)))
+    print("[BD] " .. L("tp_msg_found") .. ": " .. gun.Name)
+    return true
+end
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if not CFG.SheriffTPEnabled then return end
+    if input.KeyCode == CFG.SheriffTPKey then teleportSheriff(false) end
+end)
+
+--// ============================================================
+--// Weapon Giver
+--// ============================================================
+local WeaponList = {
+    "GG-17","J9a1 Meretta","HWISSH-226 SHIELD","GG-26","Dual Merettas",
+    "KriegsHerr-9","R&E Snubby","R&E M10","IZVEKH-412","Beagle-50",
+    "Beagle-44","Steel R&E Snubby","ZKZ-Obrez","H&W-MPi5K","JS-5A-Obrez",
+    "SHOT-7","Buxxberg-COMPACT","SAKURA ZKZ-Obrez","SWAG-7","ANKO46",
+    "JS2-Derringy","410BONDS-Derringy","WISP","Fleet-K51","Whizz",
+    "JS1-CYCLOPS","Jolibri","Pol357","JS","JS1-Competitor",
+    "Door'bler","Mandols-5","Sawed-THUMPA","FT100","Lenitrovyak-23",
+    "K1911","Mooser","Gisil-Pistole","HEARDBALLA","ZT-33",
+    "Bouquet","H&W-K7","SKORPION","ZZ-90","PPm-41",
+    "MAK-10","Dual Micro KZis","TEKE-9","ZZ-71","LUT-E 'PIP'",
+    "Cr7s","OTz-02","JTS225-Obrez","JSK-44","Kensington",
+    "RUZKH-12","JS-22","1895-Rosey","AGM22","RR-MarkII",
+    "J21a Meretta","JS-22 Sealed","RR-LightCompactPistol","Bezzhumny",
+    "HWISSH-KP9","Kamatov","Rosen-Obrez","Daniqui-Obrez","ZOZ-106",
+    "Mares Leg","ZOZ-106SCOPED","JAVELIN-OBREZS",
+}
+local function findToolTemplate(name)
+    local roots = { ReplicatedStorage, Workspace, LocalPlayer:FindFirstChild("Backpack") }
+    local lname = name:lower()
+    for _, root in ipairs(roots) do
+        if root then
+            local ok, f = pcall(function() return root:FindFirstChild(name, true) end)
+            if ok and f and f:IsA("Tool") then return f end
+            for _, v in ipairs(root:GetDescendants()) do
+                if v:IsA("Tool") and v.Name:lower() == lname then return v end
+            end
+        end
+    end
+end
+local function giveWeapon(name)
+    local char = LocalPlayer.Character
+    local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not bp then warn("[BD] Backpack not found") return false end
+    if bp:FindFirstChild(name) or (char and char:FindFirstChild(name)) then
+        print("[BD] Already have: " .. name)
+        return false
+    end
+    local t = findToolTemplate(name)
+    if not t then print("[BD] Template not found: " .. name) return false end
+    local c = t:Clone()
+    c.Parent = bp
+    print("[BD] Given: " .. name)
+    return true
+end
+
+print("[BD] core systems ready")
+
+--// ============================================================
+--// GUI (main menu)
+--// ============================================================
+local GUI = Instance.new("ScreenGui")
+GUI.Name = "BD_Menu"; GUI.ResetOnSpawn = false
+GUI.DisplayOrder = 9998; GUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+if not pcall(function() GUI.Parent = GuiRoot end) or not GUI.Parent then
+    GUI.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local Localizable = {}
+local SearchBox
+local function regText(inst, key, prefix, suffix)
+    Localizable[inst] = {key=key, prefix=prefix or "", suffix=suffix or ""}
+    inst.Text = (prefix or "") .. L(key) .. (suffix or "")
+end
+local function refreshTexts()
+    for inst, d in pairs(Localizable) do
+        if inst.Parent then inst.Text = d.prefix .. L(d.key) .. d.suffix end
+    end
+    if SearchBox and SearchBox.Parent then SearchBox.PlaceholderText = L("search") end
+end
+
+local THEME = {
+    bg=Color3.fromRGB(22,22,28), bgAlt=Color3.fromRGB(30,30,38),
+    panel=Color3.fromRGB(36,36,44), panelHover=Color3.fromRGB(44,44,54),
+    stroke=Color3.fromRGB(58,58,72), accent=Color3.fromRGB(120,170,255),
+    accent2=Color3.fromRGB(80,200,120), danger=Color3.fromRGB(220,70,70),
+    text=Color3.fromRGB(220,220,230), textDim=Color3.fromRGB(150,150,165),
+}
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.fromOffset(720, 500)
+Main.Position = UDim2.new(0.5,-360,0.5,-250)
+Main.BackgroundColor3 = THEME.bg
+Main.BorderSizePixel = 0
+Main.Active = true; Main.Draggable = true; Main.Parent = GUI
+local mc = Instance.new("UICorner", Main)
+mc.CornerRadius = UDim.new(0, 10)
+local ms = Instance.new("UIStroke", Main)
+ms.Color = THEME.stroke; ms.Thickness = 1
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1,0,0,36)
+TitleBar.BackgroundColor3 = THEME.bgAlt
+TitleBar.BorderSizePixel = 0; TitleBar.Parent = Main
+local tc = Instance.new("UICorner", TitleBar)
+tc.CornerRadius = UDim.new(0, 10)
+
+local Title = Instance.new("TextLabel")
+Title.BackgroundTransparency = 1
+Title.Size = UDim2.new(1,-180,1,0); Title.Position = UDim2.fromOffset(14,0)
+Title.Font = Enum.Font.GothamBold; Title.TextSize = 14
+Title.TextColor3 = THEME.text; Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TitleBar
+regText(Title, "title", "  ", "")
+
+local function headerBtn(text, color, xOff)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.fromOffset(26,26); b.Position = UDim2.new(1,xOff,0,5)
+    b.BackgroundColor3 = color; b.BorderSizePixel = 0
+    b.Font = Enum.Font.GothamBold; b.TextSize = 14
+    b.TextColor3 = Color3.new(1,1,1); b.Text = text; b.Parent = TitleBar
+    local c = Instance.new("UICorner", b)
+    c.CornerRadius = UDim.new(0, 6)
+    return b
+end
+local CloseBtn = headerBtn("X", THEME.danger, -32)
+local MinBtn = headerBtn("-", THEME.panel, -64)
+
+SearchBox = Instance.new("TextBox")
+SearchBox.Size = UDim2.new(1,-180,0,26); SearchBox.Position = UDim2.new(0,150,0,5)
+SearchBox.BackgroundColor3 = THEME.panel
+SearchBox.BorderSizePixel = 0; SearchBox.Font = Enum.Font.Gotham
+SearchBox.TextSize = 12; SearchBox.TextColor3 = THEME.text
+SearchBox.PlaceholderColor3 = THEME.textDim; SearchBox.Text = ""
+SearchBox.ClearTextOnFocus = false; SearchBox.Parent = TitleBar
+local sc = Instance.new("UICorner", SearchBox)
+sc.CornerRadius = UDim.new(0, 6)
+
+local TabBar = Instance.new("Frame")
+TabBar.Size = UDim2.new(1,-20,0,34); TabBar.Position = UDim2.fromOffset(10,42)
+TabBar.BackgroundTransparency = 1; TabBar.Parent = Main
+local tbl = Instance.new("UIListLayout", TabBar)
+tbl.FillDirection = Enum.FillDirection.Horizontal
+tbl.Padding = UDim.new(0, 3)
+
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1,-20,1,-110); Content.Position = UDim2.fromOffset(10,82)
+Content.BackgroundColor3 = THEME.bgAlt
+Content.BorderSizePixel = 0; Content.ClipsDescendants = true
+Content.Parent = Main
+local cc = Instance.new("UICorner", Content)
+cc.CornerRadius = UDim.new(0, 8)
+
+local Footer = Instance.new("Frame")
+Footer.Size = UDim2.new(1,-20,0,22)
+Footer.Position = UDim2.new(0,10,1,-30)
+Footer.BackgroundTransparency = 1; Footer.Parent = Main
+
+local function footerBtn(key, color, xPos, xSize)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(0,xSize,1,0); b.Position = UDim2.new(0,xPos,0,0)
+    b.BackgroundColor3 = color; b.BorderSizePixel = 0
+    b.Font = Enum.Font.GothamBold; b.TextSize = 11
+    b.TextColor3 = Color3.new(1,1,1); b.Parent = Footer
+    local c = Instance.new("UICorner", b)
+    c.CornerRadius = UDim.new(0, 5)
+    regText(b, key)
+    return b
+end
+local SaveBtn = footerBtn("save", Color3.fromRGB(60,130,90), 0, 90)
+local ResetBtn = footerBtn("reset", Color3.fromRGB(140,90,50), 96, 90)
+local HideBtn = footerBtn("hide", Color3.fromRGB(60,60,80), 192, 90)
+
+local Tabs = {}
+local TabButtons = {}
+local CurrentTab = nil
+
+local function switchTab(name)
+    for n, f in pairs(Tabs) do f.Visible = (n == name) end
+    for n, b in pairs(TabButtons) do
+        b.BackgroundColor3 = (n == name) and THEME.accent or THEME.panel
+        b.TextColor3 = (n == name) and Color3.new(1,1,1) or THEME.text
+    end
+    CurrentTab = name
+end
+
+local function createTabBtn(name, icon, key)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.fromOffset(78,30)
+    b.BackgroundColor3 = THEME.panel
+    b.BorderSizePixel = 0; b.Font = Enum.Font.GothamMedium
+    b.TextSize = 10; b.TextColor3 = THEME.text
+    b.AutoButtonColor = false; b.Parent = TabBar
+    local c = Instance.new("UICorner", b)
+    c.CornerRadius = UDim.new(0, 6)
+    regText(b, key, icon .. " ", "")
+    b.MouseEnter:Connect(function()
+        if CurrentTab ~= name then b.BackgroundColor3 = THEME.panelHover end
+    end)
+    b.MouseLeave:Connect(function()
+        if CurrentTab ~= name then b.BackgroundColor3 = THEME.panel end
+    end)
+    b.MouseButton1Click:Connect(function() switchTab(name) end)
+    TabButtons[name] = b
+    return b
+end
+
+local function createPage(name)
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Name = name; scroll.Size = UDim2.new(1,-8,1,-8)
+    scroll.Position = UDim2.fromOffset(4,4)
+    scroll.BackgroundTransparency = 1; scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 5
+    scroll.ScrollBarImageColor3 = THEME.accent
+    scroll.CanvasSize = UDim2.new(0,0,0,0)
+    scroll.Visible = false; scroll.Parent = Content
+    local layout = Instance.new("UIListLayout", scroll)
+    layout.Padding = UDim.new(0, 5)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        scroll.CanvasSize = UDim2.new(0,0,0, layout.AbsoluteContentSize.Y + 12)
+    end)
+    Tabs[name] = scroll
+    return scroll
+end
+
+SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    local q = SearchBox.Text:lower():gsub("%s+", "")
+    for tabName, page in pairs(Tabs) do
+        local has = false
+        for _, row in ipairs(page:GetChildren()) do
+            if row:IsA("GuiObject") and row.Name ~= "" and not row:IsA("UIListLayout") then
+                local hit = (q == "") or row.Name:lower():find(q, 1, true) ~= nil
+                row.Visible = hit
+                if hit then has = true end
+            end
+        end
+        if q ~= "" then
+            TabButtons[tabName].BackgroundColor3 = has and THEME.panel or THEME.bg
+        end
+    end
+end)
+
+local function makeSection(parent, key)
+    local container = Instance.new("Frame")
+    container.Name = L(key)
+    container.Size = UDim2.new(1,0,0,0)
+    container.AutomaticSize = Enum.AutomaticSize.Y
+    container.BackgroundTransparency = 1; container.Parent = parent
+    local header = Instance.new("TextButton")
+    header.Size = UDim2.new(1,0,0,26)
+    header.BackgroundColor3 = THEME.bg
+    header.BorderSizePixel = 0; header.Font = Enum.Font.GothamBold
+    header.TextSize = 12; header.TextColor3 = THEME.accent
+    header.TextXAlignment = Enum.TextXAlignment.Left
+    header.AutoButtonColor = false; header.Parent = container
+    local hc = Instance.new("UICorner", header)
+    hc.CornerRadius = UDim.new(0, 5)
+    regText(header, key, "  ▾  ", "")
+    local inner = Instance.new("Frame")
+    inner.Size = UDim2.new(1,0,0,0)
+    inner.AutomaticSize = Enum.AutomaticSize.Y
+    inner.BackgroundTransparency = 1; inner.Parent = container
+    local il = Instance.new("UIListLayout", inner)
+    il.Padding = UDim.new(0, 4)
+    local layout = Instance.new("UIListLayout", container)
+    layout.Padding = UDim.new(0, 4)
+    local collapsed = false
+    header.MouseButton1Click:Connect(function()
+        collapsed = not collapsed
+        inner.Visible = not collapsed
+        Localizable[header].prefix = collapsed and "  ▸  " or "  ▾  "
+        header.Text = Localizable[header].prefix .. L(key)
+    end)
+    return inner
+end
+
+local function makeToggle(parent, key, init, cb)
+    local row = Instance.new("Frame")
+    row.Name = L(key); row.Size = UDim2.new(1,0,0,30)
+    row.BackgroundColor3 = THEME.panel
+    row.BorderSizePixel = 0; row.Parent = parent
+    local rc = Instance.new("UICorner", row)
+    rc.CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1,-80,1,0); lbl.Position = UDim2.fromOffset(12,0)
+    lbl.Font = Enum.Font.Gotham; lbl.TextSize = 13
+    lbl.TextColor3 = THEME.text; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = row
+    regText(lbl, key)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.fromOffset(52,22)
+    btn.Position = UDim2.new(1,-62,0.5,-11)
+    btn.BackgroundColor3 = init and THEME.accent2 or Color3.fromRGB(70,70,80)
+    btn.BorderSizePixel = 0; btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12; btn.TextColor3 = Color3.new(1,1,1)
+    btn.Text = init and "ON" or "OFF"
+    btn.AutoButtonColor = false; btn.Parent = row
+    local bc = Instance.new("UICorner", btn)
+    bc.CornerRadius = UDim.new(0, 6)
+    local state = init
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        btn.Text = state and "ON" or "OFF"
+        btn.BackgroundColor3 = state and THEME.accent2 or Color3.fromRGB(70,70,80)
+        if cb then pcall(cb, state) end
+    end)
+    return row
+end
+
+local function makeSlider(parent, key, min, max, step, init, suffix, cb)
+    local row = Instance.new("Frame")
+    row.Name = L(key); row.Size = UDim2.new(1,0,0,50)
+    row.BackgroundColor3 = THEME.panel
+    row.BorderSizePixel = 0; row.Parent = parent
+    local rc = Instance.new("UICorner", row)
+    rc.CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1,-130,0,18); lbl.Position = UDim2.fromOffset(12,2)
+    lbl.Font = Enum.Font.Gotham; lbl.TextSize = 13
+    lbl.TextColor3 = THEME.text; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = row
+    regText(lbl, key)
+    local val = Instance.new("TextBox")
+    val.Size = UDim2.fromOffset(80,20)
+    val.Position = UDim2.new(1,-92,0,2)
+    val.BackgroundColor3 = THEME.bg
+    val.BorderSizePixel = 0; val.Font = Enum.Font.GothamBold
+    val.TextSize = 12; val.TextColor3 = THEME.accent
+    val.Text = tostring(init); val.ClearTextOnFocus = false
+    val.Parent = row
+    local vc = Instance.new("UICorner", val)
+    vc.CornerRadius = UDim.new(0, 4)
+    local unit = Instance.new("TextLabel")
+    unit.BackgroundTransparency = 1
+    unit.Size = UDim2.fromOffset(20,20); unit.Position = UDim2.new(1,-12,0,2)
+    unit.Font = Enum.Font.Gotham; unit.TextSize = 12
+    unit.TextColor3 = THEME.textDim; unit.Text = suffix or ""
+    unit.Parent = row
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(1,-24,0,8); bar.Position = UDim2.fromOffset(12,32)
+    bar.BackgroundColor3 = THEME.bg
+    bar.BorderSizePixel = 0; bar.Parent = row
+    local barC = Instance.new("UICorner", bar)
+    barC.CornerRadius = UDim.new(0, 4)
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((init-min)/(max-min), 0, 1, 0)
+    fill.BackgroundColor3 = THEME.accent
+    fill.BorderSizePixel = 0; fill.Parent = bar
+    local fc = Instance.new("UICorner", fill)
+    fc.CornerRadius = UDim.new(0, 4)
+    local dragging = false
+    local function apply(v)
+        v = math.clamp(v, min, max)
+        v = math.floor(v/step + 0.5) * step
+        v = math.floor(v*100 + 0.5)/100
+        fill.Size = UDim2.new((v-min)/(max-min), 0, 1, 0)
+        val.Text = tostring(v)
+        if cb then pcall(cb, v) end
+    end
+    local function fromX(x)
+        local abs, w = bar.AbsolutePosition.X, bar.AbsoluteSize.X
+        apply(min + (max-min) * math.clamp((x-abs)/w, 0, 1))
+    end
+    bar.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true; fromX(i.Position.X)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+            fromX(i.Position.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    val.FocusLost:Connect(function()
+        local n = tonumber(val.Text)
+        if n then apply(n) else val.Text = tostring(init) end
+    end)
+    return row
+end
+
+local function makeDropdown(parent, key, options, init, cb)
+    local wrapper = Instance.new("Frame")
+    wrapper.Name = L(key); wrapper.Size = UDim2.new(1,0,0,30)
+    wrapper.BackgroundTransparency = 1
+    wrapper.ClipsDescendants = false; wrapper.Parent = parent
+    local row = Instance.new("TextButton")
+    row.Size = UDim2.new(1,0,0,30)
+    row.BackgroundColor3 = THEME.panel
+    row.BorderSizePixel = 0; row.Text = ""
+    row.AutoButtonColor = false; row.Parent = wrapper
+    local rc = Instance.new("UICorner", row)
+    rc.CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1,-150,1,0); lbl.Position = UDim2.fromOffset(12,0)
+    lbl.Font = Enum.Font.Gotham; lbl.TextSize = 13
+    lbl.TextColor3 = THEME.text; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = row
+    regText(lbl, key)
+    local cur = Instance.new("TextLabel")
+    cur.BackgroundTransparency = 1
+    cur.Size = UDim2.new(0,130,1,0); cur.Position = UDim2.new(1,-138,0,0)
+    cur.Font = Enum.Font.GothamBold; cur.TextSize = 12
+    cur.TextColor3 = THEME.accent; cur.TextXAlignment = Enum.TextXAlignment.Right
+    cur.Text = init .. "  ▾"; cur.Parent = row
+    local list = Instance.new("Frame")
+    list.Size = UDim2.new(1,0,0,0); list.Position = UDim2.new(0,0,0,32)
+    list.BackgroundColor3 = THEME.bg
+    list.BorderSizePixel = 0; list.ClipsDescendants = true
+    list.Visible = false; list.Parent = wrapper
+    local lc = Instance.new("UICorner", list)
+    lc.CornerRadius = UDim.new(0, 6)
+    local ll = Instance.new("UIListLayout", list)
+    ll.Padding = UDim.new(0, 1)
+    local open = false
+    local function setOpen(v)
+        open = v; list.Visible = v
+        if v then
+            local shown = math.min(#options, 12)
+            list.Size = UDim2.new(1,0,0, shown*24+4)
+            wrapper.Size = UDim2.new(1,0,0, 32+shown*24+6)
+        else
+            list.Size = UDim2.new(1,0,0,0)
+            wrapper.Size = UDim2.new(1,0,0,30)
+        end
+    end
+    for _, opt in ipairs(options) do
+        local ob = Instance.new("TextButton")
+        ob.Size = UDim2.new(1,-4,0,23); ob.Position = UDim2.fromOffset(2,0)
+        ob.BackgroundTransparency = 1
+        ob.Font = Enum.Font.Gotham; ob.TextSize = 12
+        ob.TextColor3 = (opt==init) and THEME.accent or THEME.text
+        ob.Text = opt; ob.Parent = list
+        ob.MouseEnter:Connect(function()
+            ob.BackgroundTransparency = 0; ob.BackgroundColor3 = THEME.panel
+        end)
+        ob.MouseLeave:Connect(function() ob.BackgroundTransparency = 1 end)
+        ob.MouseButton1Click:Connect(function()
+            cur.Text = opt .. "  ▾"
+            setOpen(false)
+            if cb then pcall(cb, opt) end
+        end)
+    end
+    row.MouseButton1Click:Connect(function() setOpen(not open) end)
+    return wrapper
+end
+
+local function makeButton(parent, key, cb, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1,0,0,28)
+    btn.BackgroundColor3 = color or Color3.fromRGB(60,90,150)
+    btn.BorderSizePixel = 0; btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13; btn.TextColor3 = Color3.new(1,1,1)
+    btn.AutoButtonColor = false; btn.Parent = parent
+    local bc = Instance.new("UICorner", btn)
+    bc.CornerRadius = UDim.new(0, 6)
+    regText(btn, key)
+    local base = color or Color3.fromRGB(60,90,150)
+    btn.MouseEnter:Connect(function() btn.BackgroundColor3 = base:Lerp(Color3.new(1,1,1), 0.15) end)
+    btn.MouseLeave:Connect(function() btn.BackgroundColor3 = base end)
+    btn.MouseButton1Click:Connect(function() if cb then pcall(cb) end end)
+    return btn
+end
+
+local KEYBINDS = {
+    "Right Mouse (default)","Left Mouse","Middle Mouse",
+    "E","Q","F","C","V","G","T","R","X","Z",
+    "Left Shift","Left Alt","Left Ctrl","Space","Tab",
+}
+local KEYMAP = {
+    ["Right Mouse (default)"]=Enum.UserInputType.MouseButton2,
+    ["Left Mouse"]=Enum.UserInputType.MouseButton1,
+    ["Middle Mouse"]=Enum.UserInputType.MouseButton3,
+    ["E"]=Enum.KeyCode.E,["Q"]=Enum.KeyCode.Q,["F"]=Enum.KeyCode.F,
+    ["C"]=Enum.KeyCode.C,["V"]=Enum.KeyCode.V,["G"]=Enum.KeyCode.G,
+    ["T"]=Enum.KeyCode.T,["R"]=Enum.KeyCode.R,["X"]=Enum.KeyCode.X,
+    ["Z"]=Enum.KeyCode.Z,
+    ["Left Shift"]=Enum.KeyCode.LeftShift,["Left Alt"]=Enum.KeyCode.LeftAlt,
+    ["Left Ctrl"]=Enum.KeyCode.LeftControl,["Space"]=Enum.KeyCode.Space,
+    ["Tab"]=Enum.KeyCode.Tab,
+}
+local function keyName(key)
+    for n, k in pairs(KEYMAP) do
+        if k == key then return n end
+    end
+    return "Right Mouse (default)"
+end
+
+createTabBtn("Aim","🎯","tab_aim")
+createTabBtn("ESP","👁","tab_esp")
+createTabBtn("Roles","🔫","tab_roles")
+createTabBtn("Misc","⚙","tab_misc")
+createTabBtn("TP","📡","tab_tp")
+createTabBtn("Weapons","🗡","tab_weapons")
+createTabBtn("Ammo","🔢","tab_ammo")
+createTabBtn("Lang","🌐","tab_lang")
+
+local AimPage = createPage("Aim")
+local ESPPage = createPage("ESP")
+local RolePage = createPage("Roles")
+local MiscPage = createPage("Misc")
+local TPPage = createPage("TP")
+local WeaponsPage = createPage("Weapons")
+local AmmoPage = createPage("Ammo")
+local LangPage = createPage("Lang")
+
+-- AIM
+local a1 = makeSection(AimPage, "aim_assist")
+makeToggle(a1,"aim_enabled",CFG.AimEnabled,function(v) CFG.AimEnabled=v end)
+makeToggle(a1,"aim_toggle",CFG.AimToggleMode,function(v) CFG.AimToggleMode=v; aimToggled=false end)
+makeToggle(a1,"aim_armed",CFG.AimOnlyArmed,function(v) CFG.AimOnlyArmed=v end)
+makeToggle(a1,"aim_wallcheck",CFG.AimWallCheck,function(v) CFG.AimWallCheck=v end)
+makeToggle(a1,"aim_sticky",CFG.AimSticky,function(v) CFG.AimSticky=v end)
+makeToggle(a1,"aim_enemyonly",CFG.TeamEnemyOnly,function(v) CFG.TeamEnemyOnly=v end)
+local a2 = makeSection(AimPage, "aim_fov")
+makeSlider(a2,"aim_fov_px",10,400,5,CFG.AimFOV,"px",function(v) CFG.AimFOV=v end)
+makeToggle(a2,"aim_show_fov",CFG.AimShowFOV,function(v) CFG.AimShowFOV=v end)
+makeSlider(a2,"aim_yoffset",-120,120,1,CFG.AimYOffset,"px",function(v) CFG.AimYOffset=v end)
+makeSlider(a2,"aim_maxdist",50,1500,25,CFG.AimMaxDist,"m",function(v) CFG.AimMaxDist=v end)
+makeDropdown(a2,"aim_hitbox",{"Head","Torso","UpperTorso","HumanoidRootPart","LeftHand","RightHand","LeftFoot","RightFoot"},CFG.AimBone,function(v) CFG.AimBone=v end)
+makeDropdown(a2,"aim_keybind",KEYBINDS,keyName(CFG.AimKey),function(v) CFG.AimKey=KEYMAP[v] or Enum.UserInputType.MouseButton2 end)
+local a3 = makeSection(AimPage, "aim_smooth_sec")
+makeSlider(a3,"aim_smooth",0.01,1,0.01,CFG.AimSmooth,"",function(v) CFG.AimSmooth=v end)
+makeToggle(a3,"aim_humanize",CFG.AimHumanize,function(v) CFG.AimHumanize=v end)
+makeSlider(a3,"aim_jitter",0,3,0.05,CFG.AimJitter,"°",function(v) CFG.AimJitter=v end)
+makeSlider(a3,"aim_fire_grace",0,0.5,0.01,CFG.AimFireGrace,"s",function(v) CFG.AimFireGrace=v end)
+local a4 = makeSection(AimPage, "aim_autofire")
+makeToggle(a4,"aim_autofire_on",CFG.AutoFire,function(v) CFG.AutoFire=v end)
+makeToggle(a4,"aim_autofire_head",CFG.AutoFireOnlyHead,function(v) CFG.AutoFireOnlyHead=v end)
+makeSlider(a4,"aim_autofire_radius",2,60,1,CFG.AutoFireRadius,"px",function(v) CFG.AutoFireRadius=v end)
+makeSlider(a4,"aim_autofire_cd",0.05,1,0.05,CFG.AutoFireCooldown,"s",function(v) CFG.AutoFireCooldown=v end)
+
+-- ESP
+local e1 = makeSection(ESPPage, "esp_general")
+makeToggle(e1,"esp_enabled",CFG.ESP,function(v) CFG.ESP=v end)
+makeToggle(e1,"esp_boxes",CFG.ESPBox,function(v) CFG.ESPBox=v end)
+makeToggle(e1,"esp_names",CFG.ESPName,function(v) CFG.ESPName=v end)
+makeToggle(e1,"esp_distance",CFG.ESPDistance,function(v) CFG.ESPDistance=v end)
+makeToggle(e1,"esp_health",CFG.ESPHealth,function(v) CFG.ESPHealth=v end)
+makeToggle(e1,"esp_tracers",CFG.ESPTracer,function(v) CFG.ESPTracer=v end)
+makeToggle(e1,"esp_hide_team",CFG.ESPTeamCheck,function(v) CFG.ESPTeamCheck=v end)
+makeSlider(e1,"esp_maxdist",100,2000,50,CFG.ESPMaxDist,"m",function(v) CFG.ESPMaxDist=v end)
+makeDropdown(e1,"esp_mode",{"Model","Screen"},CFG.ESPMode,function(v) CFG.ESPMode=v end)
+makeSlider(e1,"esp_scale",0.5,2.5,0.05,CFG.ESPTextScale,"",function(v) CFG.ESPTextScale=v end)
+local e2 = makeSection(ESPPage, "esp_drops")
+makeToggle(e2,"esp_drop_on",CFG.DropESP,function(v)
+    CFG.DropESP=v
+    if not v then for i in pairs(DropObjects) do removeDrop(i) end end
+end)
+makeToggle(e2,"esp_drop_hl",CFG.DropHighlight,function(v) CFG.DropHighlight=v end)
+makeSlider(e2,"esp_drop_max",50,800,25,CFG.DropMaxDist,"m",function(v) CFG.DropMaxDist=v end)
+makeSlider(e2,"esp_drop_min",0,30,1,CFG.DropMinDist,"m",function(v) CFG.DropMinDist=v end)
+makeSlider(e2,"esp_drop_scan",0.5,5,0.5,CFG.DropScanRate,"s",function(v) CFG.DropScanRate=v end)
+
+-- ROLES
+local r1 = makeSection(RolePage, "role_detect")
+makeToggle(r1,"role_esp",CFG.RoleESP,function(v) CFG.RoleESP=v end)
+makeToggle(r1,"role_remember",CFG.RoleRemember,function(v) CFG.RoleRemember=v end)
+makeToggle(r1,"role_keepfirst",CFG.RoleKeepFirst,function(v) CFG.RoleKeepFirst=v end)
+makeToggle(r1,"role_fuzzy",CFG.RoleFuzzy,function(v) CFG.RoleFuzzy=v end)
+makeToggle(r1,"role_log",CFG.RoleChatLog,function(v) CFG.RoleChatLog=v end)
+makeButton(r1,"role_clear",clearRoles,Color3.fromRGB(120,60,60))
+local r2 = makeSection(RolePage, "role_teams")
+makeToggle(r2,"role_team_esp",CFG.TeamESP,function(v) CFG.TeamESP=v end)
+makeToggle(r2,"role_team_color",CFG.TeamColors,function(v) CFG.TeamColors=v end)
+
+-- MISC
+local m1 = makeSection(MiscPage, "misc_recoil")
+makeToggle(m1,"misc_recoil_on",CFG.NoRecoil,function(v) CFG.NoRecoil=v end)
+makeSlider(m1,"misc_recoil_scl",0,1,0.05,CFG.RecoilScale,"",function(v) CFG.RecoilScale=v end)
+makeToggle(m1,"misc_no_fire_an",CFG.NoFireAnims,function(v) CFG.NoFireAnims=v end)
+local m3 = makeSection(MiscPage, "misc_anti_rag")
+makeToggle(m3,"misc_anti_on",CFG.AntiRagdoll,function(v)
+    CFG.AntiRagdoll=v
+    if v then startAnti() else stopAnti() end
+end)
+makeToggle(m3,"misc_anti_run",CFG.AntiRagdollForceRun,function(v) CFG.AntiRagdollForceRun=v end)
+makeToggle(m3,"misc_anti_anch",CFG.AntiRagdollAnchor,function(v)
+    CFG.AntiRagdollAnchor=v
+    local c = LocalPlayer.Character
+    local hrp = c and c:FindFirstChild("HumanoidRootPart")
+    if hrp then hrp.Anchored = v end
+end)
+local m2 = makeSection(MiscPage, "misc_menu")
+makeButton(m2,"misc_hide_btn",function() GUI.Enabled=false end,Color3.fromRGB(60,60,80))
+makeButton(m2,"misc_save_btn",saveConfig,Color3.fromRGB(60,130,90))
+makeButton(m2,"misc_reset_btn",function()
+    if delfile then pcall(delfile, ConfigFile) end
+    print("[BD] Config reset. Reload script.")
+end,Color3.fromRGB(140,90,50))
+
+-- TP
+local t1 = makeSection(TPPage, "tp_sheriff")
+makeToggle(t1,"tp_enabled",CFG.SheriffTPEnabled,function(v) CFG.SheriffTPEnabled=v end)
+makeToggle(t1,"tp_any_drop",CFG.SheriffTPAnyDrop,function(v) CFG.SheriffTPAnyDrop=v end)
+makeButton(t1,"tp_btn",function() teleportSheriff(false) end,Color3.fromRGB(60,130,90))
+makeDropdown(t1,"tp_key",KEYBINDS,keyName(CFG.SheriffTPKey),function(v) CFG.SheriffTPKey=KEYMAP[v] or Enum.KeyCode.T end)
+local th1 = Instance.new("TextLabel")
+th1.Size = UDim2.new(1,0,0,30); th1.BackgroundTransparency = 1
+th1.Font = Enum.Font.Gotham; th1.TextSize = 12; th1.TextWrapped = true
+th1.TextColor3 = THEME.textDim; th1.TextXAlignment = Enum.TextXAlignment.Left
+th1.TextYAlignment = Enum.TextYAlignment.Top; th1.Parent = t1
+regText(th1, "tp_hint")
+local th2 = th1:Clone()
+th2.Parent = t1
+regText(th2, "tp_keys_hint")
+
+-- WEAPONS
+local w1 = makeSection(WeaponsPage, "weapon_giver")
+local selectedWeapon = WeaponList[1]
+makeDropdown(w1,"weapon_select",WeaponList,selectedWeapon,function(v) selectedWeapon=v end)
+makeButton(w1,"weapon_give",function() giveWeapon(selectedWeapon) end,Color3.fromRGB(60,130,90))
+local wh = Instance.new("TextLabel")
+wh.Size = UDim2.new(1,0,0,50); wh.BackgroundTransparency = 1
+wh.Font = Enum.Font.Gotham; wh.TextSize = 11; wh.TextWrapped = true
+wh.TextColor3 = THEME.textDim; wh.TextXAlignment = Enum.TextXAlignment.Left
+wh.TextYAlignment = Enum.TextYAlignment.Top; wh.Parent = w1
+regText(wh, "weapon_hint")
+
+-- AMMO
+local am1 = makeSection(AmmoPage, "ammo_header")
+makeToggle(am1,"ammo_hud_on",CFG.AmmoHUD,function(v)
+    CFG.AmmoHUD=v
+    if not v then AmmoFrame.Visible = false end
+end)
+makeToggle(am1,"ammo_hud_always",CFG.AmmoHUDAlways,function(v) CFG.AmmoHUDAlways=v end)
+makeDropdown(am1,"ammo_hud_pos",{"BottomRight","BottomLeft","TopRight","TopLeft"},CFG.AmmoHUDPosition,function(v)
+    CFG.AmmoHUDPosition=v
+    applyAmmoPos()
+end)
+makeButton(am1,"ammo_debug",debugDumpTool,Color3.fromRGB(120,90,50))
+local amh = Instance.new("TextLabel")
+amh.Size = UDim2.new(1,0,0,50); amh.BackgroundTransparency = 1
+amh.Font = Enum.Font.Gotham; amh.TextSize = 11; amh.TextWrapped = true
+amh.TextColor3 = THEME.textDim; amh.TextXAlignment = Enum.TextXAlignment.Left
+amh.TextYAlignment = Enum.TextYAlignment.Top; amh.Parent = am1
+regText(amh, "ammo_hint")
+
+-- LANG
+local lg1 = makeSection(LangPage, "lang_header")
+makeButton(lg1,"lang_en",function() CFG.Language="en"; refreshTexts(); saveConfig() end,Color3.fromRGB(60,90,150))
+makeButton(lg1,"lang_ru",function() CFG.Language="ru"; refreshTexts(); saveConfig() end,Color3.fromRGB(120,70,150))
+local lh = Instance.new("TextLabel")
+lh.Size = UDim2.new(1,0,0,32); lh.BackgroundTransparency = 1
+lh.Font = Enum.Font.Gotham; lh.TextSize = 12; lh.TextWrapped = true
+lh.TextColor3 = THEME.textDim; lh.TextXAlignment = Enum.TextXAlignment.Left
+lh.TextYAlignment = Enum.TextYAlignment.Top; lh.Parent = lg1
+regText(lh, "lang_hint")
+
+CloseBtn.MouseButton1Click:Connect(function() GUI.Enabled=false end)
+MinBtn.MouseButton1Click:Connect(function()
+    local min = Main.Size.Y.Offset <= 40
+    if min then
+        Main.Size = UDim2.fromOffset(720,500)
+        TabBar.Visible, Content.Visible, Footer.Visible = true,true,true
+    else
+        Main.Size = UDim2.fromOffset(720,36)
+        TabBar.Visible, Content.Visible, Footer.Visible = false,false,false
+    end
+end)
+SaveBtn.MouseButton1Click:Connect(saveConfig)
+ResetBtn.MouseButton1Click:Connect(function()
+    if delfile then pcall(delfile, ConfigFile) end
+    print("[BD] Config file deleted. Reload.")
+end)
+HideBtn.MouseButton1Click:Connect(function() GUI.Enabled=false end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        GUI.Enabled = not GUI.Enabled
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(30)
+        if GUI.Enabled and writefile then saveConfig() end
+    end
+end)
+
+refreshTexts()
+switchTab("Aim")
+print("[BD] menu created")
+
+--// ============================================================
+--// Main loop (single, throttled)
+--// ============================================================
+local espClock = 0
+local dropClock = 0
+RunService.RenderStepped:Connect(function(dt)
+    local ok, err = pcall(function()
+        espClock = espClock + dt
+        if espClock >= 1/45 then
+            espClock = 0
+            renderESP()
+            renderDrops()
+            stepAim(dt * 2)
+            updateAmmoHUD(dt * 2)
+        else
+            stepAim(dt)
+        end
+        tryAutoFire()
+        dropClock = dropClock + dt
+        if dropClock >= (CFG.DropScanRate or 1.5) then
+            dropClock = 0
+            scanDrops()
+        end
+    end)
+    if not ok then warn("[BD] render err: " .. tostring(err)) end
+end)
+
+print("[BD] main loop running")
+
+--// ============================================================
+--// Watermark
+--// ============================================================
+local Watermark = Instance.new("ScreenGui")
+Watermark.Name = "BD_Watermark"; Watermark.ResetOnSpawn = false
+Watermark.DisplayOrder = 10000; Watermark.IgnoreGuiInset = true
+if not pcall(function() Watermark.Parent = GuiRoot end) or not Watermark.Parent then
+    Watermark.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local WMHolder = Instance.new("Frame")
+WMHolder.AnchorPoint = Vector2.new(0.5,0)
+WMHolder.Position = UDim2.new(0.5,0,0,12)
+WMHolder.Size = UDim2.fromOffset(320,40)
+WMHolder.BackgroundColor3 = Color3.fromRGB(15,15,20)
+WMHolder.BackgroundTransparency = 0.25
+WMHolder.BorderSizePixel = 0; WMHolder.Parent = Watermark
+local wmc = Instance.new("UICorner", WMHolder)
+wmc.CornerRadius = UDim.new(0, 10)
+local WMStroke = Instance.new("UIStroke", WMHolder)
+WMStroke.Thickness = 2; WMStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local rainbow = ColorSequence.new({
+    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255,0,0)),
+    ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255,140,0)),
+    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255,255,0)),
+    ColorSequenceKeypoint.new(0.50, Color3.fromRGB(0,255,80)),
+    ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0,200,255)),
+    ColorSequenceKeypoint.new(0.83, Color3.fromRGB(120,0,255)),
+    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255,0,0)),
+})
+local WMGrad = Instance.new("UIGradient", WMStroke)
+WMGrad.Color = rainbow
+
+local WMText = Instance.new("TextLabel")
+WMText.AnchorPoint = Vector2.new(0.5,0.5)
+WMText.Position = UDim2.new(0.5,0,0.5,0)
+WMText.Size = UDim2.new(1,-16,1,0)
+WMText.BackgroundTransparency = 1
+WMText.Font = Enum.Font.GothamBold; WMText.TextSize = 18
+WMText.TextColor3 = Color3.new(1,1,1)
+WMText.Text = "тгк чита - t.me/idloga"
+WMText.TextStrokeTransparency = 0.2
+WMText.Parent = WMHolder
+local WMTGrad = Instance.new("UIGradient", WMText)
+WMTGrad.Color = rainbow
+
+local wmOffset = 0
+local wmClock = 0
+RunService.RenderStepped:Connect(function(dt)
+    wmClock = wmClock + dt
+    if wmClock < 0.05 then return end
+    local s = wmClock; wmClock = 0
+    wmOffset = (wmOffset + s * 0.35) % 1
+    WMGrad.Offset = Vector2.new(wmOffset, 0)
+    WMTGrad.Offset = Vector2.new(wmOffset, 0)
+    WMStroke.Transparency = 0.15 + math.sin(os.clock()*2.5)*0.15
+end)
+
+WMHolder.BackgroundTransparency = 1
+WMStroke.Transparency = 1
+WMText.TextTransparency = 1
+task.spawn(function()
+    for i = 1, 20 do
+        task.wait(0.03)
+        WMHolder.BackgroundTransparency = 0.25 + (1 - i/20)*0.75
+        WMText.TextTransparency = (1 - i/20)
+    end
+end)
+
+print("[BD] loaded! RightShift = menu")
