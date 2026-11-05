@@ -1,0 +1,1239 @@
+--// Blood Debt Suite — Xeno Edition
+print("[BD] startup...")
+
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local Workspace         = game:GetService("Workspace")
+local HttpService       = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local VirtualUser
+pcall(function() VirtualUser = game:GetService("VirtualUser") end)
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    if Workspace.CurrentCamera then Camera = Workspace.CurrentCamera end
+end)
+
+print("[BD] services ok, Camera:", Camera and "ok" or "nil")
+
+--// ============================================================
+--// I18N
+--// ============================================================
+local I18N = {
+    en = {
+        title="Blood Debt · t.me/idloga", search="🔍 Search...",
+        save="Save", reset="Reset", hide="Hide (RS)",
+        tab_aim="Aim", tab_esp="ESP", tab_roles="Roles", tab_misc="Misc",
+        tab_tp="Teleport", tab_weapons="Weapons", tab_ammo="Ammo", tab_lang="Language",
+        aim_assist="Aim assist", aim_enabled="Aim enabled", aim_toggle="Toggle mode",
+        aim_armed="Only while armed", aim_wallcheck="Wall check", aim_sticky="Sticky target",
+        aim_enemyonly="Enemy team only", aim_fov="FOV", aim_fov_px="FOV",
+        aim_show_fov="Show FOV circle", aim_yoffset="Crosshair Y offset",
+        aim_maxdist="Max distance", aim_hitbox="Hitbox", aim_keybind="Aim keybind",
+        aim_smooth_sec="Smoothing", aim_smooth="Smoothing", aim_humanize="Humanize",
+        aim_jitter="Jitter", aim_fire_grace="Fire grace",
+        aim_autofire="Auto-Fire", aim_autofire_on="Auto-Fire enabled",
+        aim_autofire_head="Only if bone == Head", aim_autofire_radius="Aim tolerance (px)",
+        aim_autofire_cd="Fire cooldown",
+        esp_general="General", esp_enabled="ESP enabled", esp_boxes="Boxes",
+        esp_names="Names", esp_distance="Distance", esp_health="Health bar",
+        esp_tracers="Tracers", esp_hide_team="Hide teammates", esp_maxdist="Max distance",
+        esp_mode="Render mode", esp_scale="Global scale", esp_drops="Dropped weapons",
+        esp_drop_on="Dropped ESP", esp_drop_hl="Highlight dropped",
+        esp_drop_max="Drop max dist", esp_drop_min="Drop min dist", esp_drop_scan="Scan interval",
+        role_detect="Role detection", role_esp="Role ESP", role_remember="Remember role",
+        role_keepfirst="Keep first role", role_fuzzy="Fuzzy match", role_log="Log to console",
+        role_clear="Clear cache", role_teams="Teams", role_team_esp="Team ESP",
+        role_team_color="Color by team",
+        misc_recoil="No recoil", misc_recoil_on="No recoil", misc_recoil_scl="Recoil scale",
+        misc_no_fire_an="No fire anims", misc_anti_rag="Anti-Ragdoll",
+        misc_anti_on="Anti-Ragdoll", misc_anti_run="Force Running", misc_anti_anch="Anchor HRP",
+        misc_menu="Menu", misc_hide_btn="Hide menu", misc_save_btn="Save config",
+        misc_reset_btn="Reset config",
+        tp_sheriff="Sheriff gun TP", tp_enabled="Sheriff TP", tp_key="TP keybind",
+        tp_btn="Teleport now", tp_scan="Scan interval",
+        tp_msg_found="Gun found", tp_msg_notfound="Gun not found", tp_any_drop="Any drop",
+        tp_hint="Teleports to sheriff's gun", tp_keys_hint="Keybind works with menu closed",
+        weapon_giver="Weapon giver", weapon_select="Select weapon", weapon_give="Give",
+        weapon_refresh="Refresh", weapon_hint="Client clone only",
+        ammo_header="Ammo HUD", ammo_hud_on="Show ammo HUD",
+        ammo_hud_always="Any gun", ammo_hud_pos="Position",
+        ammo_debug="Debug: dump Tool", ammo_hint="Reads attrs/values",
+        lang_header="Language", lang_en="English", lang_ru="Русский", lang_hint="Instant",
+    },
+    ru = {
+        title="Blood Debt · t.me/idloga", search="🔍 Поиск...",
+        save="Сохранить", reset="Сброс", hide="Скрыть (RS)",
+        tab_aim="Аим", tab_esp="ESP", tab_roles="Роли", tab_misc="Прочее",
+        tab_tp="TP", tab_weapons="Оружие", tab_ammo="Патроны", tab_lang="Язык",
+        aim_assist="Помощь аима", aim_enabled="Аим", aim_toggle="Режим переключения",
+        aim_armed="Только с оружием", aim_wallcheck="Проверка стен", aim_sticky="Держать цель",
+        aim_enemyonly="Только враги", aim_fov="FOV", aim_fov_px="FOV",
+        aim_show_fov="Круг FOV", aim_yoffset="Смещение Y",
+        aim_maxdist="Макс. дистанция", aim_hitbox="Хитбокс", aim_keybind="Клавиша",
+        aim_smooth_sec="Сглаживание", aim_smooth="Сглаживание", aim_humanize="Гуманизация",
+        aim_jitter="Дрожание", aim_fire_grace="Пауза после выстрела",
+        aim_autofire="Авто-выстрел", aim_autofire_on="Авто-выстрел",
+        aim_autofire_head="Только в голову", aim_autofire_radius="Допуск (px)",
+        aim_autofire_cd="Задержка",
+        esp_general="Общие", esp_enabled="ESP", esp_boxes="Квадраты",
+        esp_names="Имена", esp_distance="Дистанция", esp_health="Здоровье",
+        esp_tracers="Трассеры", esp_hide_team="Скрывать союзников", esp_maxdist="Макс. дистанция",
+        esp_mode="Режим", esp_scale="Масштаб", esp_drops="Дропы",
+        esp_drop_on="ESP дропов", esp_drop_hl="Подсветка",
+        esp_drop_max="Макс. дистанция", esp_drop_min="Мин. дистанция", esp_drop_scan="Интервал",
+        role_detect="Роли", role_esp="ESP ролей", role_remember="Запоминать",
+        role_keepfirst="Оставлять первую", role_fuzzy="Нечёткий поиск", role_log="Логи",
+        role_clear="Очистить", role_teams="Команды", role_team_esp="ESP команд",
+        role_team_color="Цвет по команде",
+        misc_recoil="Без отдачи", misc_recoil_on="Убрать отдачу", misc_recoil_scl="Множитель",
+        misc_no_fire_an="Без анимаций", misc_anti_rag="Анти-регдолл",
+        misc_anti_on="Анти-регдолл", misc_anti_run="Принудительно Running", misc_anti_anch="Фиксировать HRP",
+        misc_menu="Меню", misc_hide_btn="Скрыть меню", misc_save_btn="Сохранить",
+        misc_reset_btn="Сброс",
+        tp_sheriff="TP к шерифу", tp_enabled="TP включён", tp_key="Клавиша TP",
+        tp_btn="Телепорт", tp_scan="Интервал",
+        tp_msg_found="Найдено", tp_msg_notfound="Не найдено", tp_any_drop="Любой дроп",
+        tp_hint="Телепорт к оружию шерифа", tp_keys_hint="Работает с закрытым меню",
+        weapon_giver="Выдача оружия", weapon_select="Выбрать", weapon_give="Выдать",
+        weapon_refresh="Обновить", weapon_hint="Только клиент",
+        ammo_header="HUD патронов", ammo_hud_on="Показывать HUD",
+        ammo_hud_always="Любое оружие", ammo_hud_pos="Позиция",
+        ammo_debug="Дамп Tool", ammo_hint="Читает attrs/values",
+        lang_header="Язык", lang_en="English", lang_ru="Русский", lang_hint="Сразу",
+    },
+}
+
+--// ============================================================
+--// Config
+--// ============================================================
+local CFG = {
+    Language="en",
+    ESP=true, ESPBox=true, ESPName=true, ESPDistance=true, ESPHealth=true,
+    ESPTracer=false, ESPMaxDist=1200, ESPTeamCheck=false, ESPMode="Model", ESPTextScale=1,
+    DropESP=true, DropHighlight=true, DropMaxDist=250, DropMinDist=8, DropScanRate=1.5,
+    TeamESP=true, TeamColors=true, TeamEnemyOnly=true,
+    RoleESP=true, RoleRemember=true, RoleKeepFirst=true, RoleFuzzy=false, RoleChatLog=false,
+    AimEnabled=true, AimKey=Enum.UserInputType.MouseButton2, AimToggleMode=false,
+    AimFOV=110, AimShowFOV=true, AimSmooth=0.12, AimBone="Head", AimMaxDist=700,
+    AimWallCheck=true, AimSticky=true, AimOnlyArmed=false, AimHumanize=true,
+    AimJitter=0.08, AimYOffset=0, AimFireGrace=0.22,
+    AutoFire=false, AutoFireRadius=12, AutoFireCooldown=0.15, AutoFireOnlyHead=true,
+    NoRecoil=false, RecoilScale=0, NoFireAnims=false,
+    AntiRagdoll=true, AntiRagdollForceRun=true, AntiRagdollAnchor=false,
+    SheriffTPEnabled=true, SheriffTPKey=Enum.KeyCode.T, SheriffTPAnyDrop=false, SheriffTPScan=1.5,
+    AmmoHUD=true, AmmoHUDAlways=false, AmmoHUDPosition="BottomRight",
+}
+
+local function L(key, fb)
+    local pack = I18N[CFG.Language or "en"] or I18N.en
+    return pack[key] or I18N.en[key] or fb or key
+end
+
+--// Config persistence (safe for Xeno)
+local ConfigFile = "BD_Config.json"
+local function saveConfig()
+    if not writefile then return end
+    local ok, data = pcall(function()
+        local t = {}
+        for k, v in pairs(CFG) do
+            if typeof(v) == "EnumItem" then
+                t[k] = { __enum = v.EnumType.Name, value = v.Name }
+            elseif typeof(v) == "number" or typeof(v) == "boolean" or typeof(v) == "string" then
+                t[k] = v
+            end
+        end
+        return HttpService:JSONEncode(t)
+    end)
+    if ok and data then pcall(writefile, ConfigFile, data) end
+end
+local function loadConfig()
+    if not isfile then return end
+    local okExists, exists = pcall(isfile, ConfigFile)
+    if not okExists or not exists then return end
+    if not readfile then return end
+    local okRaw, raw = pcall(readfile, ConfigFile)
+    if not okRaw or not raw then return end
+    local okData, data = pcall(HttpService.JSONDecode, HttpService, raw)
+    if not okData or type(data) ~= "table" then return end
+    for k, v in pairs(data) do
+        if type(v) == "table" and v.__enum then
+            local et = Enum[v.__enum]
+            if et then
+                local item = et[v.value]
+                if item then CFG[k] = item end
+            end
+        elseif CFG[k] ~= nil then
+            CFG[k] = v
+        end
+    end
+end
+loadConfig()
+
+print("[BD] config loaded")
+
+--// ============================================================
+--// Weapon role tables
+--// ============================================================
+local KILLER_WEAPONS = {
+    "JS2-Derringy","410BONDS-Derringy","WISP","Fleet-K51","Whizz","JS1-CYCLOPS","Jolibri","'Memories'",
+    "Pol357","Cute JS2-Derringy","Sawn-off","JS","JS1-Competitor","Door'bler","Mandols-5","Sawed-THUMPA",
+    "FT100","Lenitrovyak-23","Gild Sawn-off","Gild JS","Blaze Sawn-off","K1911","Mooser","K1911 Threaded",
+    "Gisil-Pistole","HEARDBALLA","ZT-33","Bouquet","Gild K1911","H&W-K7","ZT-33 (Golden)",
+    "Gild Gisil-Pistole","'Memorial'","JS-22","1895-Rosey","AGM22","RR-MarkII","J21a Meretta",
+    "JS-22 Sealed","'Desperation'","Plastic JS-22","Steel 1895-Rosey","RR-LightCompactPistol",
+    "RR-LightCompactPistolS","Bezzhumny","HWISSH-KP9","Kamatov","ChromeSlide Turqoise RR-LCP",
+    "Camo RR-LCPS","Cute RR-LCPS","Rosen-Obrez","Daniqui-Obrez","ZOZ-106","Mares Leg","ZOZ-106SCOPED",
+    "Skeleton Rosen-Obrez","JAVELIN-OBREZS","Gild Rosen-Obrez","Steel Mares Leg","Steel Rosen-Obrez",
+    "SKORPION","ZZ-90","PPm-41","MAK-10","Dual Micro KZis","TEKE-9","ZZ-71","LUT-E 'PIP'","Cr7s",
+    "OTz-02","PRIDE SKORPION","Unioned PPm-41","JTS225-Obrez","JSK-44","Kensington","RUZKH-12",
+    "Gild JTS225-Obrez","Party Cannon JTS225-Obrez",
+}
+local VIGILANTE_WEAPONS = {
+    "J9a1 Meretta","GG-17","Dual GG-17s","HWISSH-226 SHIELD","GG-26","Dual Merettas","KriegsHerr-9",
+    "Gild GG-17","Gild J9a1 M","PRIDE H-226 SHIELD","R&E Snubby","R&E M10","IZVEKH-412","Beagle-50",
+    "Beagle-44","'Paradise'","Steel R&E Snubby","ZKZ-Obrez","H&W-MPi5K","JS-5A-Obrez","SHOT-7",
+    "Buxxberg-COMPACT","SAKURA ZKZ-Obrez","SWAG-7","ANKO46","Gild ZKZ-Obrez","Unioned ZKZ-Obrez",
+}
+local SKIN_PREFIXES = {
+    "Gild ","Steel ","Cute ","Plastic ","Blaze ","Skeleton ","Camo ","Unioned ","PRIDE ",
+    "SAKURA ","Party Cannon ","ChromeSlide Turqoise ","Dual ",
+}
+local function normalize(n)
+    n = tostring(n or "")
+    return (n:gsub("^%s+",""):gsub("%s+$","")):lower()
+end
+local WEAPON_ROLE = {}
+local function register(list, role)
+    for _, w in ipairs(list) do
+        WEAPON_ROLE[normalize(w)] = role
+        for _, p in ipairs(SKIN_PREFIXES) do
+            if w:sub(1,#p) == p then WEAPON_ROLE[normalize(w:sub(#p+1))] = role end
+        end
+    end
+end
+register(KILLER_WEAPONS, "KILLER")
+register(VIGILANTE_WEAPONS, "VIGILANTE")
+
+local function baseName(n)
+    for _, p in ipairs(SKIN_PREFIXES) do
+        local lp = normalize(p)
+        if n:sub(1,#lp) == lp then return n:sub(#lp+1) end
+    end
+    return n
+end
+local function weaponToRole(name)
+    if not name then return nil end
+    local n = normalize(name)
+    local b = baseName(n)
+    if WEAPON_ROLE[n] then return WEAPON_ROLE[n] end
+    if WEAPON_ROLE[b] then return WEAPON_ROLE[b] end
+    if not CFG.RoleFuzzy then return nil end
+    local best, bestLen = nil, 0
+    for k, r in pairs(WEAPON_ROLE) do
+        if #k > 4 and #k > bestLen and (n:find(k,1,true) or k:find(n,1,true)) then
+            best, bestLen = r, #k
+        end
+    end
+    return best
+end
+
+local RoleCache = {}
+local function clearRoles() RoleCache = {} end
+
+local NON_WEAPON_TOOLS = {
+    ["mop"]=true, ["kitchenknife"]=true, ["gardeningscissors"]=true,
+    ["toolbelt"]=true, ["ducttape"]=true,
+}
+local function getEquippedTool(char)
+    if not char then return nil end
+    for _, v in ipairs(char:GetChildren()) do
+        if v:IsA("Tool") then return v end
+    end
+    return nil
+end
+local function isTaskTool(t) return t and NON_WEAPON_TOOLS[normalize(t.Name):gsub("%s+","")] == true end
+
+-- cached tool ONLY for LocalPlayer
+local cachedToolLocal = nil
+local cachedToolClock = 0
+local function getEquippedToolLocalCached()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    local now = os.clock()
+    if now - cachedToolClock >= 0.25 then
+        cachedToolClock = now
+        cachedToolLocal = nil
+        for _, v in ipairs(char:GetChildren()) do
+            if v:IsA("Tool") then cachedToolLocal = v; break end
+        end
+    end
+    return cachedToolLocal
+end
+
+local function updateRole(plr)
+    local char = plr.Character
+    local tool = (plr == LocalPlayer) and getEquippedToolLocalCached() or getEquippedTool(char)
+    if tool and not isTaskTool(tool) then
+        local role = weaponToRole(tool.Name)
+        if role then
+            if CFG.RoleRemember and RoleCache[plr] then return RoleCache[plr] end
+            RoleCache[plr] = role
+            return role
+        end
+    end
+    if CFG.RoleRemember then return RoleCache[plr] end
+    return nil
+end
+LocalPlayer.CharacterAdded:Connect(clearRoles)
+
+--// ============================================================
+--// Helpers
+--// ============================================================
+local function S() return (Camera.ViewportSize.Y / 1080) * (CFG.ESPTextScale or 1) end
+local function fovPixels() return CFG.AimFOV * (Camera.ViewportSize.Y / 1080) end
+local function aimCenter()
+    local vp = Camera.ViewportSize
+    return Vector2.new(vp.X/2, vp.Y/2 + (CFG.AimYOffset or 0) * (vp.Y / 1080))
+end
+
+local COLOR = {
+    default=Color3.fromRGB(255,255,255), killer=Color3.fromRGB(255,55,55),
+    vigilante=Color3.fromRGB(70,160,255), enemy=Color3.fromRGB(255,70,70),
+    ally=Color3.fromRGB(90,255,130), attackers=Color3.fromRGB(255,140,40),
+    defenders=Color3.fromRGB(60,190,255), detective=Color3.fromRGB(255,230,90),
+    healthOk=Color3.fromRGB(80,255,90), healthLow=Color3.fromRGB(255,80,80),
+}
+
+-- shared raycast params
+local RayParams = RaycastParams.new()
+RayParams.FilterType = Enum.RaycastFilterType.Exclude
+RayParams.IgnoreWater = true
+RayParams.FilterDescendantsInstances = { LocalPlayer.Character, Camera }
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.1)
+    RayParams.FilterDescendantsInstances = { LocalPlayer.Character, Camera }
+end)
+
+--// ============================================================
+--// Anti-Ragdoll (throttled 30Hz)
+--// ============================================================
+local antiConn = nil
+local BANNED = {
+    BallSocketConstraint=true, HingeConstraint=true,
+    NoCollisionConstraint=true, RopeConstraint=true,
+}
+local function cleanChar(char)
+    if not char or not char.Parent then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return end
+    if hum.PlatformStand then hum.PlatformStand = false end
+    if hum.Sit then hum.Sit = false end
+    if CFG.AntiRagdollForceRun then
+        local st = hum:GetState()
+        if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown
+            or st == Enum.HumanoidStateType.Physics then
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+        end
+    end
+    local parts = { char:FindFirstChild("UpperTorso"), char:FindFirstChild("Torso"),
+                    char:FindFirstChild("HumanoidRootPart"), char:FindFirstChild("Head") }
+    for _, p in ipairs(parts) do
+        if p then
+            for _, v in ipairs(p:GetChildren()) do
+                if BANNED[v.ClassName] then pcall(function() v:Destroy() end)
+                elseif v:IsA("Motor6D") and not v.Enabled then v.Enabled = true end
+            end
+        end
+    end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp and CFG.AntiRagdollAnchor and not hrp.Anchored then hrp.Anchored = true end
+end
+local function startAnti()
+    if antiConn then antiConn:Disconnect() end
+    local clock = 0
+    antiConn = RunService.RenderStepped:Connect(function(dt)
+        if not CFG.AntiRagdoll then return end
+        clock = clock + dt
+        if clock < 1/30 then return end
+        clock = 0
+        local c = LocalPlayer.Character
+        if c then pcall(cleanChar, c) end
+    end)
+end
+local function stopAnti()
+    if antiConn then antiConn:Disconnect(); antiConn = nil end
+    local c = LocalPlayer.Character
+    local hrp = c and c:FindFirstChild("HumanoidRootPart")
+    if hrp and hrp.Anchored then hrp.Anchored = false end
+end
+if CFG.AntiRagdoll then startAnti() end
+LocalPlayer.CharacterAdded:Connect(function() task.wait(0.3) if CFG.AntiRagdoll then startAnti() end end)
+
+--// ============================================================
+--// GUI root (safe for Xeno — no gethui)
+--// ============================================================
+local GuiRoot = game:GetService("CoreGui")
+if typeof(gethui) == "function" then
+    local ok, h = pcall(gethui)
+    if ok and h then GuiRoot = h end
+end
+
+local Screen = Instance.new("ScreenGui")
+Screen.Name = "BD_Overlay"
+Screen.IgnoreGuiInset = true
+Screen.ResetOnSpawn = false
+Screen.DisplayOrder = 9999
+Screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+if not pcall(function() Screen.Parent = GuiRoot end) or not Screen.Parent then
+    Screen.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+print("[BD] Screen created")
+
+-- element helpers
+local function newFrame(parent, z)
+    local f = Instance.new("Frame")
+    f.BackgroundTransparency = 1; f.BorderSizePixel = 0
+    f.ZIndex = z or 2; f.Visible = false; f.Parent = parent
+    return f
+end
+local function newStroke(p, c, t)
+    local s = Instance.new("UIStroke")
+    s.Color = c; s.Thickness = t or 1
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = p
+    return s
+end
+local function newLabel(p, bold, z)
+    local t = Instance.new("TextLabel")
+    t.BackgroundTransparency = 1
+    t.Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham
+    t.TextStrokeTransparency = 0.35
+    t.TextXAlignment = Enum.TextXAlignment.Center
+    t.TextYAlignment = Enum.TextYAlignment.Center
+    t.AnchorPoint = Vector2.new(0.5, 0.5)
+    t.ZIndex = z or 3; t.Visible = false; t.Parent = p
+    return t
+end
+local function setLine(f, from, to, thick, col)
+    local d = to - from
+    f.AnchorPoint = Vector2.new(0, 0.5)
+    f.Position = UDim2.fromOffset(from.X, from.Y)
+    f.Size = UDim2.fromOffset(d.Magnitude, math.max(1, thick))
+    f.Rotation = math.deg(math.atan2(d.Y, d.X))
+    f.BackgroundColor3 = col
+    f.BackgroundTransparency = 0
+    f.Visible = true
+end
+
+--// ============================================================
+--// Team utils
+--// ============================================================
+local function getTeamAttr(plr)
+    local ch = plr and plr.Character
+    if not ch then return nil end
+    local t = ch:GetAttribute("Team")
+    return (type(t) == "string" and t ~= "") and t or nil
+end
+local function myTeam() return getTeamAttr(LocalPlayer) end
+local function sameTeamAttr(plr)
+    local a, b = getTeamAttr(plr), myTeam()
+    return a ~= nil and b ~= nil and a == b
+end
+local function isEnemy(plr)
+    local a, b = getTeamAttr(plr), myTeam()
+    if not a or not b then return true end
+    return a ~= b
+end
+
+local TEAM_TAGS = {
+    Attackers={text="ATTACKERS",color=COLOR.attackers},
+    Defenders={text="DEFENDERS",color=COLOR.defenders},
+    Detective={text="DETECTIVE",color=COLOR.detective},
+}
+
+local function getHum(c) return c and c:FindFirstChildOfClass("Humanoid") end
+local function isAlive(plr)
+    local ch = plr.Character
+    local hum = getHum(ch)
+    local root = ch and (ch:FindFirstChild("HumanoidRootPart") or ch.PrimaryPart)
+    return ch and hum and root and hum.Health > 0, ch, hum, root
+end
+local function visibleFrom(part)
+    if not part then return false end
+    local from = Camera.CFrame.Position
+    local hit = Workspace:Raycast(from, part.Position - from, RayParams)
+    if not hit then return true end
+    return hit.Instance:IsDescendantOf(part.Parent)
+end
+
+--// ============================================================
+--// Model ESP
+--// ============================================================
+local ModelESP = {}
+local function createModelESP(plr)
+    local hl = Instance.new("Highlight")
+    hl.Name = "BD_HL"; hl.FillTransparency = 0.72; hl.OutlineTransparency = 0
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Enabled = false; hl.Parent = Screen
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "BD_BB"; bb.AlwaysOnTop = true; bb.LightInfluence = 0
+    bb.ClipsDescendants = false; bb.Size = UDim2.fromOffset(240, 56)
+    bb.StudsOffsetWorldSpace = Vector3.new(0, 2.8, 0)
+    bb.Enabled = false; bb.Parent = Screen
+    local title = Instance.new("TextLabel")
+    title.BackgroundTransparency = 1; title.Size = UDim2.new(1,0,0,20)
+    title.Font = Enum.Font.GothamBold; title.TextSize = 14
+    title.TextStrokeTransparency = 0.35; title.TextColor3 = COLOR.default
+    title.Parent = bb
+    local sub = title:Clone()
+    sub.Font = Enum.Font.Gotham; sub.TextSize = 12
+    sub.Position = UDim2.new(0,0,0,20); sub.Parent = bb
+    local barBg = Instance.new("Frame")
+    barBg.AnchorPoint = Vector2.new(0.5,0)
+    barBg.Position = UDim2.new(0.5,0,0,40)
+    barBg.Size = UDim2.new(0,90,0,4)
+    barBg.BackgroundColor3 = Color3.new(0,0,0)
+    barBg.BorderSizePixel = 0; barBg.Parent = bb
+    local barFill = Instance.new("Frame")
+    barFill.Size = UDim2.new(1,0,1,0)
+    barFill.BackgroundColor3 = COLOR.healthOk
+    barFill.BorderSizePixel = 0; barFill.Parent = barBg
+    ModelESP[plr] = {hl=hl, bb=bb, title=title, sub=sub, barBg=barBg, barFill=barFill}
+    return ModelESP[plr]
+end
+local function hideModel(plr)
+    local m = ModelESP[plr]; if not m then return end
+    if m.hl.Enabled then m.hl.Enabled = false end
+    if m.bb.Enabled then m.bb.Enabled = false end
+end
+local function removeModel(plr)
+    local m = ModelESP[plr]; if not m then return end
+    pcall(function() m.hl:Destroy() end)
+    pcall(function() m.bb:Destroy() end)
+    ModelESP[plr] = nil
+end
+local function updateModel(plr, char, col, title, subText, hp)
+    local m = ModelESP[plr] or createModelESP(plr)
+    local head = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
+    if not head then hideModel(plr); return end
+    local k = S()
+    m.hl.Adornee = char; m.hl.FillColor = col; m.hl.OutlineColor = col
+    m.hl.FillTransparency = CFG.ESPBox and 0.72 or 1
+    m.hl.Enabled = true
+    m.bb.Adornee = head
+    m.bb.Size = UDim2.fromOffset(240*k, 56*k); m.bb.Enabled = true
+    m.title.Size = UDim2.new(1,0,0,20*k); m.title.TextSize = 14*k
+    local ts = CFG.ESPName and (title or "") or ""
+    if m.title.Text ~= ts then m.title.Text = ts end
+    m.title.TextColor3 = col
+    m.sub.Position = UDim2.new(0,0,0,20*k)
+    m.sub.Size = UDim2.new(1,0,0,18*k); m.sub.TextSize = 12*k
+    if m.sub.Text ~= (subText or "") then m.sub.Text = subText or "" end
+    m.sub.TextColor3 = col
+    m.barBg.Position = UDim2.new(0.5,0,0,40*k)
+    m.barBg.Size = UDim2.new(0,90*k,0,4*k)
+    m.barBg.Visible = CFG.ESPHealth and hp ~= nil
+    if hp then
+        m.barFill.Size = UDim2.new(hp,0,1,0)
+        m.barFill.BackgroundColor3 = COLOR.healthLow:Lerp(COLOR.healthOk, hp)
+    end
+end
+
+--// Screen ESP
+local ESPObjects = {}
+local function createESP(plr)
+    local box = newFrame(Screen, 2)
+    local boxOut = newStroke(box, Color3.new(0,0,0), 3)
+    local boxIn = newStroke(box, COLOR.default, 1)
+    ESPObjects[plr] = {
+        box=box, boxOut=boxOut, boxIn=boxIn,
+        name=newLabel(Screen, true, 4), info=newLabel(Screen, false, 4),
+        healthBg=newFrame(Screen, 2), health=newFrame(Screen, 3),
+        tracer=newFrame(Screen, 1),
+    }
+end
+local function hideDrawings(o)
+    if not o then return end
+    for k, d in pairs(o) do
+        if k ~= "boxOut" and k ~= "boxIn" and d.Visible then d.Visible = false end
+    end
+end
+local function hideESP(plr) hideDrawings(ESPObjects[plr]); hideModel(plr) end
+local function removeESP(plr)
+    removeModel(plr)
+    local o = ESPObjects[plr]; if not o then return end
+    for k, d in pairs(o) do
+        if k ~= "boxOut" and k ~= "boxIn" then pcall(function() d:Destroy() end) end
+    end
+    ESPObjects[plr] = nil
+end
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then createESP(p) end
+end
+Players.PlayerAdded:Connect(function(p) if p ~= LocalPlayer then createESP(p) end end)
+Players.PlayerRemoving:Connect(removeESP)
+
+print("[BD] ESP objects created")
+
+--// ============================================================
+--// Drops
+--// ============================================================
+local DropObjects = {}
+local function dropAnchor(inst)
+    if inst:IsA("BasePart") then return inst end
+    if inst:IsA("Tool") or inst:IsA("Model") then
+        return (inst:IsA("Model") and inst.PrimaryPart)
+            or inst:FindFirstChild("Handle")
+            or inst:FindFirstChildWhichIsA("BasePart")
+    end
+end
+local function insideChar(inst)
+    local n = inst
+    while n and n ~= Workspace do
+        if n:FindFirstChildOfClass("Humanoid") then return true end
+        n = n.Parent
+    end
+    return false
+end
+local function isLocalOrVM(inst)
+    if Camera and inst:IsDescendantOf(Camera) then return true end
+    local ch = LocalPlayer.Character
+    if ch and inst:IsDescendantOf(ch) then return true end
+    local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if bp and inst:IsDescendantOf(bp) then return true end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        local o = plr.Character
+        if o and inst:IsDescendantOf(o) then return true end
+    end
+    return false
+end
+local function createDropESP(inst, part, role)
+    local hl = Instance.new("Highlight")
+    hl.FillTransparency = 0.6; hl.OutlineTransparency = 0
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Enabled = false; hl.Parent = Screen
+    local bb = Instance.new("BillboardGui")
+    bb.AlwaysOnTop = true; bb.LightInfluence = 0
+    bb.Size = UDim2.fromOffset(220, 34)
+    bb.StudsOffsetWorldSpace = Vector3.new(0, 1.2, 0)
+    bb.Enabled = false; bb.Parent = Screen
+    local label = Instance.new("TextLabel")
+    label.BackgroundTransparency = 1
+    label.Size = UDim2.new(1,0,0,16)
+    label.Font = Enum.Font.GothamBold; label.TextSize = 13
+    label.TextStrokeTransparency = 0.35; label.Parent = bb
+    local sub = label:Clone()
+    sub.Font = Enum.Font.Gotham; sub.TextSize = 11
+    sub.Position = UDim2.new(0,0,0,16); sub.Parent = bb
+    DropObjects[inst] = {hl=hl, bb=bb, label=label, sub=sub, part=part, role=role}
+    return DropObjects[inst]
+end
+local function removeDrop(inst)
+    local d = DropObjects[inst]; if not d then return end
+    pcall(function() d.hl:Destroy() end)
+    pcall(function() d.bb:Destroy() end)
+    DropObjects[inst] = nil
+end
+local function scanDrops()
+    if not CFG.DropESP then
+        for i in pairs(DropObjects) do removeDrop(i) end
+        return
+    end
+    local found = {}
+    local function check(inst)
+        if inst:IsA("Tool") or inst:IsA("Model") then
+            local role = weaponToRole(inst.Name)
+            if role and not insideChar(inst) and not isLocalOrVM(inst) then
+                local part = dropAnchor(inst)
+                if part then found[inst] = {part=part, role=role} end
+            end
+        end
+    end
+    for _, c in ipairs(Workspace:GetChildren()) do check(c) end
+    for i in pairs(DropObjects) do
+        if not found[i] or not i.Parent then removeDrop(i) end
+    end
+    for i, d in pairs(found) do
+        local dr = DropObjects[i] or createDropESP(i, d.part, d.role)
+        dr.part = d.part; dr.role = d.role
+    end
+end
+local function renderDrops()
+    for i, d in pairs(DropObjects) do
+        if not i.Parent or not d.part or not d.part.Parent then
+            removeDrop(i)
+        else
+            local dist = (Camera.CFrame.Position - d.part.Position).Magnitude
+            if not CFG.DropESP or dist > CFG.DropMaxDist or dist < (CFG.DropMinDist or 8) then
+                if d.bb.Enabled then d.bb.Enabled = false end
+                if d.hl.Enabled then d.hl.Enabled = false end
+            else
+                if not d.bb.Enabled then
+                    local col = (d.role == "KILLER") and COLOR.killer or COLOR.vigilante
+                    local k = S()
+                    d.bb.Adornee = d.part
+                    d.bb.Size = UDim2.fromOffset(220*k, 34*k)
+                    d.label.Size = UDim2.new(1,0,0,16*k); d.label.TextSize = 13*k
+                    d.label.Text = i.Name .. "  [" .. d.role .. "]"
+                    d.label.TextColor3 = col
+                    d.sub.Position = UDim2.new(0,0,0,16*k)
+                    d.sub.Size = UDim2.new(1,0,0,14*k); d.sub.TextSize = 11*k
+                    d.sub.TextColor3 = col
+                    d.hl.Adornee = i:IsA("Model") and i or d.part
+                    d.hl.OutlineColor = col; d.hl.FillColor = col
+                    d.bb.Enabled = true
+                end
+                local dt = math.floor(dist) .. "m"
+                if d.sub.Text ~= dt then d.sub.Text = dt end
+                if d.hl.Enabled ~= CFG.DropHighlight then d.hl.Enabled = CFG.DropHighlight end
+            end
+        end
+    end
+end
+
+--// ============================================================
+--// ESP render
+--// ============================================================
+local function renderESP()
+    local modelMode = (CFG.ESPMode == "Model")
+    local vp = Camera.ViewportSize
+    local k = S()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local o = ESPObjects[plr]
+            local ok, char, hum, root = isAlive(plr)
+            local skip = (not CFG.ESP) or (not ok) or (CFG.ESPTeamCheck and sameTeamAttr(plr))
+            if skip then
+                hideESP(plr)
+            else
+                local head = char:FindFirstChild("Head") or root
+                local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
+                local dist = (Camera.CFrame.Position - root.Position).Magnitude
+                if dist > CFG.ESPMaxDist or (not modelMode and not onScreen) then
+                    hideESP(plr)
+                else
+                    local tag, col = nil, COLOR.default
+                    local teamAttr = CFG.TeamESP and getTeamAttr(plr) or nil
+                    if teamAttr then
+                        local info = TEAM_TAGS[teamAttr]
+                        tag = info and info.text or teamAttr:upper()
+                        if CFG.TeamColors then
+                            if myTeam() then
+                                col = sameTeamAttr(plr) and COLOR.ally or COLOR.enemy
+                            else
+                                col = info and info.color or COLOR.default
+                            end
+                        end
+                    end
+                    local role = (CFG.RoleESP and not teamAttr) and updateRole(plr) or nil
+                    if role then
+                        tag = tag and (tag .. " / " .. role) or role
+                        if role == "KILLER" then col = COLOR.killer
+                        elseif role == "VIGILANTE" then col = COLOR.vigilante end
+                    end
+                    local label = plr.DisplayName ~= plr.Name
+                        and (plr.DisplayName .. " (@" .. plr.Name .. ")") or plr.Name
+                    if tag then label = label .. "  [" .. tag .. "]" end
+                    local parts = {}
+                    if CFG.ESPDistance then table.insert(parts, math.floor(dist) .. "m") end
+                    if CFG.ESPHealth then table.insert(parts, math.floor(hum.Health) .. "hp") end
+                    local tool = getEquippedTool(char)
+                    if tool then table.insert(parts, tool.Name) end
+                    local infoText = table.concat(parts, " | ")
+                    local hp = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
+
+                    if modelMode then
+                        hideDrawings(o)
+                        updateModel(plr, char, col, label, infoText, hp)
+                        if o and CFG.ESPTracer and onScreen then
+                            setLine(o.tracer, Vector2.new(vp.X/2, vp.Y), Vector2.new(pos.X, pos.Y), 1.5*k, col)
+                        end
+                    elseif o then
+                        hideModel(plr)
+                        local topV = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.6, 0))
+                        local botV = Camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3.2, 0))
+                        local h = math.abs(botV.Y - topV.Y)
+                        local w = h * 0.52
+                        local x = pos.X - w/2
+                        local y = topV.Y
+                        if CFG.ESPBox then
+                            o.box.Position = UDim2.fromOffset(x, y)
+                            o.box.Size = UDim2.fromOffset(w, h)
+                            o.boxOut.Thickness = math.max(1, 2.5*k)
+                            o.boxIn.Thickness = math.max(1, 1.2*k)
+                            o.boxIn.Color = col
+                            o.box.Visible = true
+                        else o.box.Visible = false end
+                        if CFG.ESPName then
+                            if o.name.Text ~= label then o.name.Text = label end
+                            o.name.TextColor3 = col
+                            o.name.TextSize = 14*k
+                            o.name.Size = UDim2.fromOffset(420*k, 18*k)
+                            o.name.Position = UDim2.fromOffset(pos.X, y - 11*k)
+                            o.name.Visible = true
+                        else o.name.Visible = false end
+                        if #infoText > 0 then
+                            if o.info.Text ~= infoText then o.info.Text = infoText end
+                            o.info.TextColor3 = col
+                            o.info.TextSize = 12*k
+                            o.info.Size = UDim2.fromOffset(420*k, 16*k)
+                            o.info.Position = UDim2.fromOffset(pos.X, y + h + 10*k)
+                            o.info.Visible = true
+                        else o.info.Visible = false end
+                        if CFG.ESPHealth then
+                            local barW = math.max(2, 3*k)
+                            local bx = x - barW - 3*k
+                            o.healthBg.Position = UDim2.fromOffset(bx, y)
+                            o.healthBg.Size = UDim2.fromOffset(barW, h)
+                            o.healthBg.Visible = true
+                            o.health.AnchorPoint = Vector2.new(0,1)
+                            o.health.Position = UDim2.fromOffset(bx, y + h)
+                            o.health.Size = UDim2.fromOffset(barW, h*hp)
+                            o.health.BackgroundColor3 = COLOR.healthLow:Lerp(COLOR.healthOk, hp)
+                            o.health.Visible = true
+                        else
+                            o.healthBg.Visible = false
+                            o.health.Visible = false
+                        end
+                        if CFG.ESPTracer then
+                            setLine(o.tracer, Vector2.new(vp.X/2, vp.Y), Vector2.new(pos.X, y + h), 1.5*k, col)
+                        else o.tracer.Visible = false end
+                    end
+                end
+            end
+        end
+    end
+end
+
+--// ============================================================
+--// FOV circle
+--// ============================================================
+local FovFrame = newFrame(Screen, 5)
+FovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+local fc = Instance.new("UICorner")
+fc.CornerRadius = UDim.new(1, 0); fc.Parent = FovFrame
+local FovStroke = newStroke(FovFrame, Color3.fromRGB(200,200,200), 1)
+local function updateFov(show)
+    if not show then
+        if FovFrame.Visible then FovFrame.Visible = false end
+        return
+    end
+    local r = fovPixels()
+    local c = aimCenter()
+    FovFrame.Position = UDim2.fromOffset(c.X, c.Y)
+    FovFrame.Size = UDim2.fromOffset(r*2, r*2)
+    FovStroke.Thickness = math.max(1, 1.2 * S())
+    if not FovFrame.Visible then FovFrame.Visible = true end
+end
+
+--// ============================================================
+--// AIM (simplified — no camPosLock, no fighting recoil)
+--// ============================================================
+local aimHeld, aimToggled = false, false
+local currentTarget = nil
+local lastFire = 0
+
+local function markFire() lastFire = os.clock() end
+local function isFiring() return (os.clock() - lastFire) < (CFG.AimFireGrace or 0.22) end
+
+local function aimActive()
+    if not CFG.AimEnabled then return false end
+    if CFG.AimOnlyArmed and not getEquippedToolLocalCached() then return false end
+    if CFG.AimToggleMode then return aimToggled end
+    return aimHeld
+end
+local function getBonePart(char)
+    return char:FindFirstChild(CFG.AimBone)
+        or char:FindFirstChild("Head")
+        or char:FindFirstChild("Torso")
+        or char:FindFirstChild("UpperTorso")
+        or char:FindFirstChild("HumanoidRootPart")
+        or char.PrimaryPart
+end
+local function findTarget()
+    local center = aimCenter()
+    local fov = fovPixels()
+    local best, bestDelta = nil, fov
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local ok, char = isAlive(plr)
+            local skip = (CFG.TeamEnemyOnly and not isEnemy(plr))
+                or (CFG.ESPTeamCheck and sameTeamAttr(plr))
+            if ok and not skip then
+                local bone = getBonePart(char)
+                if bone then
+                    local sp, on = Camera:WorldToViewportPoint(bone.Position)
+                    local d3 = (Camera.CFrame.Position - bone.Position).Magnitude
+                    if on and d3 <= CFG.AimMaxDist then
+                        local delta = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                        if delta <= fov and delta < bestDelta then
+                            if (not CFG.AimWallCheck) or visibleFrom(bone) then
+                                best, bestDelta = plr, delta
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+local function targetStillValid(plr)
+    if not plr or not plr.Parent then return false end
+    local ok, char = isAlive(plr); if not ok then return false end
+    local bone = getBonePart(char); if not bone then return false end
+    local sp, on = Camera:WorldToViewportPoint(bone.Position)
+    if not on then return false end
+    if (Vector2.new(sp.X, sp.Y) - aimCenter()).Magnitude > fovPixels() * 1.35 then return false end
+    if CFG.AimWallCheck and not visibleFrom(bone) then return false end
+    return true, bone
+end
+
+local rng = Random.new()
+local function jitterCFrame(cf)
+    if not CFG.AimHumanize or CFG.AimJitter <= 0 then return cf end
+    local j = math.rad(CFG.AimJitter)
+    return cf * CFrame.Angles(rng:NextNumber(-j, j), rng:NextNumber(-j, j), 0)
+end
+
+-- Auto-Fire (simple, no CaptureController)
+local lastAutoFire = 0
+local autoFireBusy = false
+local function tryAutoFire()
+    if not CFG.AutoFire then return end
+    if autoFireBusy then return end
+    if not currentTarget then return end
+    if not aimActive() then return end
+    if isFiring() then return end
+    local now = os.clock()
+    if now - lastAutoFire < (CFG.AutoFireCooldown or 0.15) then return end
+
+    local ok, char = isAlive(currentTarget)
+    if not ok then return end
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+    if not visibleFrom(head) then return end
+
+    local hs, on = Camera:WorldToViewportPoint(head.Position)
+    if not on then return end
+    if (Vector2.new(hs.X, hs.Y) - aimCenter()).Magnitude > (CFG.AutoFireRadius or 12) then return end
+
+    if CFG.AutoFireOnlyHead then
+        local tb = getBonePart(char)
+        if tb and tb.Name ~= "Head" then return end
+    end
+
+    lastAutoFire = now
+    markFire()
+    autoFireBusy = true
+    task.spawn(function()
+        pcall(function()
+            if mouse1click then
+                mouse1click()
+            elseif VirtualUser then
+                VirtualUser:Button1Down(Vector2.new(0.5, 0.5))
+                task.wait(0.02)
+                VirtualUser:Button1Up(Vector2.new(0.5, 0.5))
+            end
+        end)
+        task.wait(0.05)
+        autoFireBusy = false
+    end)
+end
+
+local aimSearchClock = 0
+local function stepAim(dt)
+    updateFov(CFG.AimShowFOV and aimActive())
+    if not aimActive() then
+        currentTarget = nil
+        return
+    end
+    -- While firing: don't touch camera, let game handle recoil
+    if isFiring() then return end
+
+    local bone
+    if CFG.AimSticky and currentTarget then
+        local v, b = targetStillValid(currentTarget)
+        if v then bone = b else currentTarget = nil end
+    end
+    if not currentTarget then
+        aimSearchClock = aimSearchClock + dt
+        if aimSearchClock >= 0.1 then
+            aimSearchClock = 0
+            currentTarget = findTarget()
+            if currentTarget then
+                local _, b = targetStillValid(currentTarget)
+                bone = b
+            end
+        end
+    end
+    if not currentTarget or not bone then return end
+
+    local camPos = Camera.CFrame.Position
+    local wantDir = (bone.Position - camPos).Unit
+    local curDir = Camera.CFrame.LookVector
+    local alpha = 1 - math.exp(-math.max(CFG.AimSmooth, 0.001) * 60 * dt)
+    local newDir = curDir:Lerp(wantDir, math.clamp(alpha, 0, 1)).Unit
+    local newCF = CFrame.lookAt(camPos, camPos + newDir)
+    Camera.CFrame = jitterCFrame(newCF)
+end
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then markFire() end
+    if (input.UserInputType == CFG.AimKey) or (input.KeyCode == CFG.AimKey) then
+        aimHeld = true
+        if CFG.AimToggleMode then aimToggled = not aimToggled end
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if (input.UserInputType == CFG.AimKey) or (input.KeyCode == CFG.AimKey) then
+        aimHeld = false
+    end
+end)
+
+--// ============================================================
+--// Ammo HUD v2
+--// ============================================================
+local AmmoHUD = Instance.new("ScreenGui")
+AmmoHUD.Name = "BD_AmmoHUD"; AmmoHUD.ResetOnSpawn = false
+AmmoHUD.DisplayOrder = 9997; AmmoHUD.IgnoreGuiInset = true
+if not pcall(function() AmmoHUD.Parent = GuiRoot end) or not AmmoHUD.Parent then
+    AmmoHUD.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local AmmoFrame = Instance.new("Frame")
+AmmoFrame.AnchorPoint = Vector2.new(1,1)
+AmmoFrame.Position = UDim2.new(1,-16,1,-16)
+AmmoFrame.Size = UDim2.fromOffset(240, 72)
+AmmoFrame.BackgroundColor3 = Color3.fromRGB(20,20,26)
+AmmoFrame.BackgroundTransparency = 0.2
+AmmoFrame.BorderSizePixel = 0
+AmmoFrame.Visible = false
+AmmoFrame.Parent = AmmoHUD
+local ac = Instance.new("UICorner", AmmoFrame)
+ac.CornerRadius = UDim.new(0, 8)
+local as = Instance.new("UIStroke", AmmoFrame)
+as.Color = Color3.fromRGB(80,80,100); as.Thickness = 1
+
+local WLabel = Instance.new("TextLabel")
+WLabel.Size = UDim2.new(1,-16,0,22); WLabel.Position = UDim2.fromOffset(8,6)
+WLabel.BackgroundTransparency = 1; WLabel.Font = Enum.Font.GothamBold
+WLabel.TextSize = 13; WLabel.TextColor3 = Color3.fromRGB(220,220,230)
+WLabel.TextXAlignment = Enum.TextXAlignment.Left; WLabel.Parent = AmmoFrame
+
+local ALabel = Instance.new("TextLabel")
+ALabel.Size = UDim2.new(1,-16,0,20); ALabel.Position = UDim2.fromOffset(8,28)
+ALabel.BackgroundTransparency = 1; ALabel.Font = Enum.Font.Gotham
+ALabel.TextSize = 12; ALabel.TextColor3 = Color3.fromRGB(150,150,165)
+ALabel.TextXAlignment = Enum.TextXAlignment.Left; ALabel.Parent = AmmoFrame
+
+local RLabel = Instance.new("TextLabel")
+RLabel.Size = UDim2.new(1,-16,0,18); RLabel.Position = UDim2.fromOffset(8,48)
+RLabel.BackgroundTransparency = 1; RLabel.Font = Enum.Font.GothamBold
+RLabel.TextSize = 12; RLabel.TextXAlignment = Enum.TextXAlignment.Left
+RLabel.Parent = AmmoFrame
+
+local function applyAmmoPos()
+    local p = CFG.AmmoHUDPosition or "BottomRight"
+    local a, u
+    if p == "BottomRight" then a,u = Vector2.new(1,1), UDim2.new(1,-16,1,-16)
+    elseif p == "BottomLeft" then a,u = Vector2.new(0,1), UDim2.new(0,16,1,-16)
+    elseif p == "TopRight" then a,u = Vector2.new(1,0), UDim2.new(1,-16,0,16)
+    elseif p == "TopLeft" then a,u = Vector2.new(0,0), UDim2.new(0,16,0,16)
+    else a,u = Vector2.new(1,1), UDim2.new(1,-16,1,-16) end
+    AmmoFrame.AnchorPoint = a; AmmoFrame.Position = u
+end
+applyAmmoPos()
+
+local AMMO_NAMES = {
+    "CurrentAmmo","Ammo","Bullets","Clip","Mag","Rounds","Loaded",
+    "Magazine","InMag","AmmoInMag","CurrentMag","ClipAmmo",
+    "StoredAmmo","ReserveAmmo","Reserve","AmmoCount","AmmoLeft",
+}
+local CHAMBER_NAMES = {
+    "Chambered","Chamber","Ready","IsReloading","Reloading",
+    "IsReloaded","BoltOpen","BoltBack","RackReady","CanFire",
+}
+local function readAttrOrVal(p, names)
+    for _, n in ipairs(names) do
+        local ok, v = pcall(function() return p:GetAttribute(n) end)
+        if ok and v ~= nil then
+            if type(v) == "number" then return v, "attr" end
+            if type(v) == "boolean" then return v and 1 or 0, "attr_bool" end
+        end
+    end
+    for _, n in ipairs(names) do
+        local v = p:FindFirstChild(n, true)
+        if v then
+            if v:IsA("NumberValue") or v:IsA("IntValue") then return v.Value, "value"
+            elseif v:IsA("BoolValue") then return v.Value and 1 or 0, "value_bool"
+            elseif v:IsA("StringValue") then
+                local num = tonumber(v.Value)
+                if num then return num, "value_str" end
+                local a, b = v.Value:match("(%d+)%s*/%s*(%d+)")
+                if a then return tonumber(a), "value_str_pair", tonumber(b) end
+            end
+        end
+    end
+end
+local function findAmmo(tool)
+    if not tool then return nil end
+    local v, s, e = readAttrOrVal(tool, AMMO_NAMES)
+    if v ~= nil then return v, s, e end
+    local h = tool:FindFirstChild("Handle")
+    if h then
+        local v2, s2 = readAttrOrVal(h, AMMO_NAMES)
+        if v2 ~= nil then return v2, s2 end
+    end
+    for _, v in ipairs(tool:GetDescendants()) do
+        local ln = v.Name:lower()
+        if ln:find("ammo") or ln:find("bullet") or ln:find("round")
+            or ln:find("mag") or ln:find("clip") then
+            if v:IsA("NumberValue") or v:IsA("IntValue") then return v.Value, "fuzzy_value"
+            elseif v:IsA("StringValue") then
+                local n = tonumber(v.Value)
+                if n then return n, "fuzzy_str" end
+                local a, b = v.Value:match("(%d+)%s*/%s*(%d+)")
+                if a then return tonumber(a), "fuzzy_str_pair", tonumber(b) end
+            end
+        end
+        for _, n in ipairs(AMMO_NAMES) do
+            local ok, av = pcall(function() return v:GetAttribute(n) end)
+            if ok and type(av) == "number" then return av, "fuzzy_attr" end
+        end
+    end
+    for _, av in pairs(tool:GetAttributes()) do
+        if type(av) == "string" and av:sub(1,1) == "{" then
+            local ok, d = pcall(function() return HttpService:JSONDecode(av) end)
+            if ok and type(d) == "table" then
+                local a = d.ammo or d.current or d.bullets or d.clip or d.rounds or d.loaded
+                if type(a) == "number" then return a, "json_attr", d.max or d.maxAmmo end
+            end
+        end
+    end
+end
+local function findChamber(tool)
+    if not tool then return nil end
+    local v = readAttrOrVal(tool, CHAMBER_NAMES)
+    if v ~= nil then return v end
+    local h = tool:FindFirstChild("Handle")
+    if h then
+        local v2 = readAttrOrVal(h, CHAMBER_NAMES)
+        if v2 ~= nil then return v2 end
+    end
+    for _, v in ipairs(tool:GetDescendants()) do
+        local ln = v.Name:lower()
+        if ln:find("chamber") or ln:find("ready") or ln:find("reload") or ln:find("bolt") then
+            if v:IsA("BoolValue") then return v.Value and 1 or 0 end
+            if v:IsA("NumberValue") or v:IsA("IntValue") then return v.Value end
+        end
+    end
+end
+
+local ammoClock = 0
+local function updateAmmoHUD(dt)
+    ammoClock = ammoClock + (dt or 0)
+    if ammoClock < 0.25 then return end
+    ammoClock = 0
+    if not CFG.AmmoHUD then
+        if AmmoFrame.Visible then AmmoFrame.Visible = false end
+        return
+    end
+    local char = LocalPlayer.Character
+    if not char then
+        if AmmoFrame.Visible then AmmoFrame.Visible = false end
+        return
+    end
+    local tool = getEquippedTool(char)
+    if not tool then
+        if AmmoFrame.Visible then AmmoFrame.Visible = false end
+        return
+    end
+    if not CFG.AmmoHUDAlways then
+        local role = weaponToRole(tool.Name)
+        if role ~= "KILLER" and role ~= "VIGILANTE" then
+            if AmmoFrame.Visible then AmmoFrame.Visible = false end
+            return
+        end
+    end
+    if not AmmoFrame.Visible then AmmoFrame.Visible = true end
+    if WLabel.Text ~= tool.Name then WLabel.Text = tool.Name end
+
+    local av, src, extra = findAmmo(tool)
+    local cv = findChamber(tool)
+
+    local at
+    if av ~= nil then
+        local mx = extra and (" / " .. tostring(extra)) or ""
+        at = "Ammo: " .. tostring(av) .. mx .. "  [" .. tostring(src) .. "]"
+    else
+        at = "Ammo not found"
+    end
+    if ALabel.Text ~= at then ALabel.Text = at end
+
+    local ready, reason = false, ""
+    if cv ~= nil then ready = cv > 0; reason = "chamber"
+    elseif av ~= nil then ready = av > 0; reason = "ammo>0" end
+
+    if ready then
+        local t = "READY" .. (reason ~= "" and (" (" .. reason .. ")") or "")
+        if RLabel.Text ~= t then
+            RLabel.Text = t
+            RLabel.TextColor3 = Color3.fromRGB(80,255,90)
+        end
+    else
+        local t = "NOT READY"
+        if RLabel.Text ~= t then
+            RLabel.Text = t
+            RLabel.TextColor3 = Color3.fromRGB(255,80,80)
+        end
+    end
+end
+
+local function debugDumpTool()
+    local c = LocalPlayer.Character
+    if not c then print("[BD] No character") return end
+    local t = getEquippedTool(c)
+    if not t then print("[BD] No tool equipped") return end
+    print("[BD] === TOOL DUMP: " .. t.Name .. " ===")
+    for k, v in pairs(t:GetAttributes()) do
+        print("   ATTR " .. k .. " = " .. tostring(v))
+    end
+    for _, v in ipairs(t:GetDescendants()) do
+        if v:IsA("NumberValue") or v:IsA("IntValue")
+            or v:IsA("BoolValue") or v:IsA("StringValue") then
+            print("   " .. v.ClassName .. " " .. v:GetFullName() .. " = " .. tostring(v.Value))
+        end
+        for k, av in pairs(v:GetAttributes()) do
+            print("   ATTR@" .. v:GetFullName() .. "." .. k .. " = " .. tostring(av))
+        end
+    end
+    print("[BD] === END ===")
+end
+
+--// ============================================================
+--// Sheriff TP
+--// ============================================================
+local SHERIFF_NAMES = {
+    "sheriff","gundrop","gun drop","policegun","police gun",
+    "vigilantegun","vigilante gun","sheriffgun","sheriff gun",
+}
+local function isSheriff(inst)
+    local n = tostring(inst.Name):lower()
+    for _, p in ipairs(SHERIFF_NAMES) do
+        if n:find(p, 1, true) then return true end
+    end
+    return false
+end
+local function getWorldAnchor(inst)
+    if inst:IsA("BasePart") then return inst end
+    if inst:IsA("Tool") then
+        return inst:FindFirstChild("Handle") or inst:FindFirstChildWhichIsA("BasePart")
+    end
+    if inst:IsA("Model") then
+        return inst.PrimaryPart or inst:FindFirstChildWhichIsA("BasePart")
+    end
